@@ -1960,7 +1960,7 @@ class PathChecker:
     def check_texture_tools_path(cls, path_str: str) -> Dict:
         """
         检查贴图工具目录是否有效。
-        这里统一按“目录中是否存在 todds.exe”判断，和 SteamCMD 的目录检查风格保持一致。
+        这里统一按“目录中是否存在 todds 可执行文件”判断（Windows 为 todds.exe，Linux 为 todds），和 SteamCMD 的目录检查风格保持一致。
         """
         if not path_str:
             return cls._format_res(False, msg=tr("api.path.texture_tools_empty", "未指定贴图工具目录"))
@@ -1970,10 +1970,11 @@ class PathChecker:
         if not path.is_dir():
             return cls._format_res(False, msg=tr("api.path.texture_tools_not_dir", "贴图工具路径必须是目录"))
 
-        exe_path = path / "todds.exe"
-        if exe_path.exists():
+        system_name = platform.system()
+        exe_path = path / ("todds.exe" if system_name == "Windows" else "todds")
+        if exe_path.is_file():
             return cls._format_res(True, data=path_str, msg=tr("api.path.texture_tools_executable", "贴图工具：{path}", path=str(exe_path)))
-        if platform.system() != "Windows":
+        if system_name not in {"Windows", "Linux"}:
             return cls._format_res(False, msg=tr("api.path.texture_tools_windows_only", "当前核心运行范围不包含 macOS/Linux 的 todds 自动化支持"), msg_type="warn")
         return cls._format_res(False, msg=tr("api.path.todds_missing", "目录下未找到 todds.exe，可在外部工具检查中下载安装"), msg_type="warn")
 

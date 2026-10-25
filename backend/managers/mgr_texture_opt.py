@@ -8,6 +8,7 @@ import os
 import platform
 import re
 import shutil
+import stat
 import struct
 import subprocess
 import tempfile
@@ -40,8 +41,10 @@ TEXTURE_ENCODE_BATCH_SIZE = 10000
 TEXTURE_RETRY_BATCH_SIZE = 64
 ZSTD_COMPRESS_RETRY_DELAYS_SECONDS = (0.1, 0.3)
 TODDS_WINDOWS_ASSET_PREFIX = "todds_Windows_"
+TODDS_LINUX_ASSET_PREFIX = "todds_Linux_x86_64_"
 TODDS_FALLBACK_VERSION = "0.4.1"
 TODDS_FALLBACK_FILENAME = f"todds_Windows_{TODDS_FALLBACK_VERSION}.zip"
+TODDS_LINUX_FALLBACK_FILENAME = f"{TODDS_LINUX_ASSET_PREFIX}{TODDS_FALLBACK_VERSION}.zip"
 SOURCE_IMAGE_EXTENSIONS = (".png",)
 SOURCE_REFERENCE_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".psd")
 TEXTURE_OUTPUT_DDS_EXT = ".dds"
@@ -291,8 +294,30 @@ def resolve_texture_tools_path(options: dict[str, Any]) -> Path:
     raw_texture_tools_path = str(options.get("texture_tools_path") or "").strip()
     if raw_texture_tools_path:
         candidate = Path(raw_texture_tools_path)
-        return candidate.parent if candidate.suffix.lower() == ".exe" else candidate
+        # Linux 下的 todds 没有扩展名，直接选中文件时也要退回所在目录。
+        return candidate.parent if candidate.suffix.lower() == ".exe" or candidate.is_file() else candidate
     return TOOLS_DIR / "texture_tools"
+
+
+def todds_executable_name(system_name: str | None = None) -> str:
+    return "todds.exe" if (system_name or platform.system()) == "Windows" else "todds"
+
+
+def todds_release_asset(system_name: str | None = None) -> tuple[str, str] | None:
+    """返回当前平台可自动下载的 todds 发布包 (前缀, 兜底文件名)；上游只发布了 x86_64 的 Linux 版。"""
+    resolved_system = system_name or platform.system()
+    if resolved_system == "Windows":
+        return TODDS_WINDOWS_ASSET_PREFIX, TODDS_FALLBACK_FILENAME
+    if resolved_system == "Linux" and platform.machine().lower() in {"x86_64", "amd64"}:
+        return TODDS_LINUX_ASSET_PREFIX, TODDS_LINUX_FALLBACK_FILENAME
+    return None
+
+
+def _ensure_executable(path: Path) -> Path:
+    # zip 解压不保留可执行位，Linux 下下载的 todds 需要补上，否则启动时报 PermissionError。
+    if os.name != "nt" and path.is_file() and not os.access(path, os.X_OK):
+        path.chmod(path.stat().st_mode | stat.S_IXUSR)
+    return path
 
 
 @dataclass
@@ -502,18 +527,20 @@ class ToddsEncoder:
         self.options = options
 
     def resolve_executable(self) -> Path:
-        if platform.system() != "Windows":
-            raise TextureOptError("todds 后端当前仅支持 Windows 自动集成。")
+        system_name = platform.system()
+        if system_name not in {"Windows", "Linux"}:
+            raise TextureOptError("todds 后端当前仅支持 Windows 和 Linux 自动集成。")
+        executable_name = todds_executable_name(system_name)
         texture_tools_path = resolve_texture_tools_path(self.options)
         candidates = [
             str(self.options.get("todds_path") or "").strip(),
-            str(texture_tools_path / "todds.exe"),
-            str(TOOLS_DIR / "texture_tools" / "todds.exe"),
-            shutil.which("todds.exe") or "",
+            str(texture_tools_path / executable_name),
+            str(TOOLS_DIR / "texture_tools" / executable_name),
+            shutil.which(executable_name) or "",
         ]
         for candidate in candidates:
-            if candidate and Path(candidate).exists(): return Path(candidate)
-        raise TextureOptError("未找到 todds.exe。请在贴图优化中心下载 todds。")
+            if candidate and Path(candidate).is_file(): return _ensure_executable(Path(candidate))
+        raise TextureOptError(f"未找到 {executable_name}。请在贴图优化中心下载 todds。")
 
     def encode_batch(
         self,
@@ -1074,8 +1101,10 @@ class TextureOptimizationManager:
             }
 
     def prepare_tool_download(self, download_mgr, options: dict[str, Any] | None = None) -> dict[str, Any]:
-        if platform.system() != "Windows":
-            raise TextureOptError("当前自动下载工具链仅支持 Windows 平台。")
+        release_asset = todds_release_asset()
+        if release_asset is None:
+            raise TextureOptError("当前自动下载工具链仅支持 Windows 和 x86_64 Linux 平台。")
+        asset_prefix, fallback_filename = release_asset
 
         merged_options = self._build_options(options)
         status = self.get_backend_status(merged_options)
@@ -1099,12 +1128,12 @@ class TextureOptimizationManager:
                 repo="todds",
                 artifact=GithubArtifactRequest(
                     kind=GITHUB_ARTIFACT_RELEASE_ASSET,
-                    asset_name_prefix=TODDS_WINDOWS_ASSET_PREFIX,
+                    asset_name_prefix=asset_prefix,
                     asset_name_suffix=".zip",
-                    fallback_download_url=f"https://github.com/todds-encoder/todds/releases/download/{TODDS_FALLBACK_VERSION}/{TODDS_FALLBACK_FILENAME}",
-                    fallback_filename=TODDS_FALLBACK_FILENAME,
+                    fallback_download_url=f"https://github.com/todds-encoder/todds/releases/download/{TODDS_FALLBACK_VERSION}/{fallback_filename}",
+                    fallback_filename=fallback_filename,
                     fallback_version=TODDS_FALLBACK_VERSION,
-                    fallback_asset_name=TODDS_FALLBACK_FILENAME,
+                    fallback_asset_name=fallback_filename,
                 ),
                 install=GithubInstallPlan(
                     action=GITHUB_INSTALL_EXTRACT,
