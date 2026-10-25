@@ -322,7 +322,7 @@ uv run python main.py --browser  # 或在浏览器中打开
 
 说明：
 
-- 运行数据（`data/`、`cache/`、`tools/`、`backups/` 等）默认放在程序目录；设置 `RIMCROW_DATA_HOME` 可以移到别处，测试也靠它避免碰到真实数据。
+- 运行数据（`data/`、`cache/`、`tools/`、`mods/`、`backups/`、`Downloads/` 等）默认放在程序目录；首次运行前设置 `RIMCROW_DATA_HOME` 可以移到别处，之后再改的话，设置里已保存的路径不会自动改写。测试也靠它避免碰到真实数据。
 - RimWorld 从 Steam 库中识别，用户数据在 `~/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios`。直接启动和生成的 `.desktop` 快捷方式与游戏自带的 `start_RimWorld.sh` 一样使用 `LC_ALL=C`。
 - SteamCMD 使用私有 `HOME` 运行，下载内容和日志都留在 SteamCMD 目录里，不会生成 `~/Steam`。
 - 通过 Steam 客户端订阅需要 `SteamworksPy.so`：下载 Steamworks SDK 压缩包后执行 `uv run python scripts/setup_steamworks_runtime.py --sdk <zip>`，脚本会用 `g++` 编译。

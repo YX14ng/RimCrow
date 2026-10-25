@@ -125,7 +125,7 @@ uv run python main.py --browser  # or open it in the browser
 
 Notes:
 
-- App data (`data/`, `cache/`, `tools/`, `backups/`, ...) is stored next to the program by default. Set `RIMCROW_DATA_HOME` to keep it elsewhere; the test suite uses this so it never touches real data.
+- App data (`data/`, `cache/`, `tools/`, `mods/`, `backups/`, `Downloads/`, ...) is stored next to the program by default. Set `RIMCROW_DATA_HOME` before the first run to keep it elsewhere; paths already saved in the settings are not rewritten if you move it later. The test suite uses it so it never touches real data.
 - RimWorld is detected from the Steam libraries; user data lives in `~/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios`. Direct launches and generated `.desktop` shortcuts use `LC_ALL=C`, like the game's own `start_RimWorld.sh`.
 - SteamCMD runs with a private `HOME`, so downloads and logs stay inside the SteamCMD folder instead of `~/Steam`.
 - Subscribing through the Steam client needs `SteamworksPy.so`: download the Steamworks SDK zip and run `uv run python scripts/setup_steamworks_runtime.py --sdk <zip>`, which compiles it with `g++`.
