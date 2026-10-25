@@ -134,6 +134,9 @@ def launch_new_application(executable_path: str = ""):
 
     if os.name == 'nt':
         popen_kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0)
+    else:
+        # 新实例不能留在旧进程的会话里，否则会随启动它的终端一起收到 SIGHUP。
+        popen_kwargs["start_new_session"] = True
 
     logger.info(f"正在静默拉起新实例: {command[0]}")
     subprocess.Popen(command, **popen_kwargs)

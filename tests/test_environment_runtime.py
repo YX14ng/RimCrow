@@ -1,3 +1,4 @@
+import os
 import threading
 import unittest
 from pathlib import Path
@@ -287,8 +288,25 @@ class TestRestartRuntime(unittest.TestCase):
              patch("sys.executable", str(fake_python)):
             command = _resolve_restart_command()
 
-        self.assertEqual(command[0], str(fake_python.resolve()))
+        self.assertEqual(command[0], str(fake_python))
         self.assertNotIn("pythonw.exe", command[0].lower())
+
+    @unittest.skipIf(os.name == "nt", "POSIX 虚拟环境的 python 是符号链接")
+    def test_restart_command_keeps_venv_python_symlink_and_browser_flag(self):
+        with TemporaryDirectory() as tmp:
+            base_python = Path(tmp) / "base" / "python3.11"
+            base_python.parent.mkdir()
+            base_python.write_text("", encoding="utf-8")
+            venv_python = Path(tmp) / "venv" / "bin" / "python3"
+            venv_python.parent.mkdir(parents=True)
+            venv_python.symlink_to(base_python)
+            # 解析符号链接会跳出虚拟环境，新实例导入不了依赖。
+            with patch("sys.executable", str(venv_python)), \
+                 patch("sys.argv", ["main.py", "--browser", "--reset-window-state"]):
+                command = _resolve_restart_command()
+
+        self.assertEqual(command[0], str(venv_python))
+        self.assertEqual(command[2:], ["--browser"])
 
     def test_restart_environment_keeps_general_env_on_non_windows(self):
         with patch("backend.utils.restart.is_windows", return_value=False), \
