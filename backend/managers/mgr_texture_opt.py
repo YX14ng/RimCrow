@@ -316,7 +316,10 @@ def todds_release_asset(system_name: str | None = None) -> tuple[str, str] | Non
 def _ensure_executable(path: Path) -> Path:
     # zip 解压不保留可执行位，Linux 下下载的 todds 需要补上，否则启动时报 PermissionError。
     if os.name != "nt" and path.is_file() and not os.access(path, os.X_OK):
-        path.chmod(path.stat().st_mode | stat.S_IXUSR)
+        try:
+            path.chmod(path.stat().st_mode | stat.S_IXUSR)
+        except OSError as exc:
+            raise TextureOptError(f"todds 没有可执行权限，且无法自动补上: {path} ({exc})") from exc
     return path
 
 

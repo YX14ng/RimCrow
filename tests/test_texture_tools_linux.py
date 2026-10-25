@@ -64,3 +64,20 @@ def test_check_texture_tools_path_accepts_linux_todds(monkeypatch, tmp_path):
     result = PathChecker.check_texture_tools_path(str(tmp_path))
 
     assert result["pass"] is True
+
+
+def test_backend_status_reports_unavailable_when_exec_bit_cannot_be_set(monkeypatch, tmp_path):
+    _linux(monkeypatch)
+    todds = tmp_path / "todds"
+    todds.write_bytes(b"\x7fELF")
+    todds.chmod(0o644)
+
+    def deny_chmod(self, mode):
+        raise PermissionError("read-only mount")
+
+    monkeypatch.setattr("backend.managers.mgr_texture_opt.Path.chmod", deny_chmod)
+
+    # 只读挂载或别人的文件补不了可执行位，状态查询要报“不可用”而不是抛异常。
+    status = TextureOptimizationManager().get_backend_status({"texture_tools_path": str(tmp_path)})
+
+    assert status["available"] is False
