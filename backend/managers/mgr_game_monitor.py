@@ -89,6 +89,8 @@ class GameMonitor:
         names: set[str] = set()
         for values in GameManager.PROCESS_NAMES_BY_SYSTEM.values():
             names.update(str(name or "").strip().lower() for name in values if str(name or "").strip())
+        # Linux 的进程名（comm）最多 15 个字符，Proton 下 psutil 也补不回完整名字。
+        names.update(name[:15] for name in list(names) if len(name) > 15)
         return names
 
     def _is_target_process(self, process_name: str | None) -> bool:

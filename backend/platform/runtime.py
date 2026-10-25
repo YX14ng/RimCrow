@@ -21,7 +21,10 @@ def supports_win32_ctypes() -> bool:
 
 
 def monitoring_mode() -> str:
-    return "windows" if is_windows() else "disabled"
+    if is_windows():
+        return "windows"
+    # 监控循环只依赖 psutil，Linux 上可以直接用。
+    return "psutil" if is_linux() else "disabled"
 
 
 def supports_process_monitoring() -> bool:

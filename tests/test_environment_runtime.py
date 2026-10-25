@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_game_monitor import GameMonitor
 from backend.paths.rimworld_layout import resolve_rimworld_layout
+from backend.platform.runtime import monitoring_mode, supports_process_monitoring
 from backend.startup import StartupCoordinator
 from backend.utils.restart import _build_restart_environment, _resolve_restart_command
 
@@ -124,6 +125,20 @@ class TestGameMonitorRuntimeSession(unittest.TestCase):
         self.assertTrue(monitor._is_target_process("RimWorldLinux.x86_64"))
         self.assertTrue(monitor._is_target_process("RimWorldMac"))
         self.assertFalse(monitor._is_target_process("Steam.exe"))
+
+    def test_is_target_process_matches_linux_truncated_comm_names(self):
+        monitor = GameMonitor.__new__(GameMonitor)
+
+        # Linux 的 comm 只保留 15 个字符，psutil 补不全 Proton 下的 Windows 路径。
+        self.assertTrue(monitor._is_target_process("RimWorldWin64.e"))
+        self.assertTrue(monitor._is_target_process("RimWorldLinux.x"))
+        self.assertFalse(monitor._is_target_process("RimWorldWin64.x"))
+
+    def test_monitoring_mode_uses_psutil_on_linux(self):
+        with patch("backend.platform.runtime.is_windows", return_value=False), \
+             patch("backend.platform.runtime.is_linux", return_value=True):
+            self.assertEqual(monitoring_mode(), "psutil")
+            self.assertTrue(supports_process_monitoring())
 
     def test_detect_game_process_checks_all_supported_names(self):
         monitor = GameMonitor.__new__(GameMonitor)
