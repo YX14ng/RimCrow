@@ -48,19 +48,21 @@ else:
     # 开发模式, 指向当前文件所在目录的上一级（项目根目录）
     HOME_DIR = Path(__file__).resolve().parent.parent
 
-DATA_DIR = HOME_DIR / "data"                # 数据目录
+# 运行数据根目录：默认就是程序目录（便携模式）；RIMCROW_DATA_HOME 可以把它移到别处，测试靠它隔离真实数据
+DATA_HOME_DIR = Path(os.environ["RIMCROW_DATA_HOME"]).expanduser().resolve() if os.environ.get("RIMCROW_DATA_HOME") else HOME_DIR
+DATA_DIR = DATA_HOME_DIR / "data"                # 数据目录
 CONFIG_PATH = DATA_DIR / "config.json"      # 配置文件路径
 GITHUB_MIRRORS_PATH = DATA_DIR / "github_mirrors.json"  # GitHub 下载镜像列表
 GITHUB_MIRROR_CATALOG_CACHE_PATH = DATA_DIR / "cache" / "github_mirror_catalog.json"  # 动态镜像节点目录缓存
 GITHUB_MIRROR_CAPABILITIES = ("web", "raw", "archive", "release_asset", "api", "git_clone", "gist", "lfs_media")
 GITHUB_MIRROR_MODES = ("direct", "auto", "builtin", "custom", "dynamic")
 CONFIG_UPDATE_BACKUP_PATH = DATA_DIR / "config.json.update.bak"
-UPDATE_DIR = HOME_DIR / "updates"     # 更新目录
-TOOLS_DIR = HOME_DIR / "tools"                # 工具目录
-MODS_DIR = HOME_DIR / "mods"                # 模组目录
-TOOL_MODS_DIR = HOME_DIR / "toolmods"    # 工具模组目录
-CACHE_DIR = HOME_DIR / "cache"                # 缓存目录
-BACKUP_DIR = HOME_DIR / "backups"                # 备份目录
+UPDATE_DIR = DATA_HOME_DIR / "updates"     # 更新目录
+TOOLS_DIR = DATA_HOME_DIR / "tools"                # 工具目录
+MODS_DIR = DATA_HOME_DIR / "mods"                # 模组目录
+TOOL_MODS_DIR = DATA_HOME_DIR / "toolmods"    # 工具模组目录
+CACHE_DIR = DATA_HOME_DIR / "cache"                # 缓存目录
+BACKUP_DIR = DATA_HOME_DIR / "backups"                # 备份目录
 # 定义缓存目录
 GALLERY_CACHE_DIR = CACHE_DIR / "gallery"       # 定义画廊缓存目录
 THUMBNAIL_CACHE_DIR = CACHE_DIR / "thumbnails"  # 定义缩略图缓存目录
