@@ -90,8 +90,8 @@ def reveal_in_file_manager(path: str) -> bool:
 def get_restart_command(executable_path: str = "", *, main_script: str | Path | None = None) -> list[str]:
     if executable_path:
         return [os.path.abspath(executable_path)]
-    # 命令行指定的浏览器模式在重启后也要保持。
-    forwarded_args = [arg for arg in sys.argv[1:] if arg == "--browser"]
+    # 命令行指定的浏览器模式在重启后也要保持；Windows 维持上游原有行为。
+    forwarded_args = [] if is_windows() else [arg for arg in sys.argv[1:] if arg == "--browser"]
     if getattr(sys, "frozen", False):
         return [os.path.abspath(sys.executable), *forwarded_args]
 
