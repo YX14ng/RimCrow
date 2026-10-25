@@ -29,7 +29,7 @@ Chinese docs are the primary source of truth. English docs are maintained as pai
 | --- | --- | --- |
 | Windows | Primary platform | Desktop mode, packaging, and full workflows are mainly verified on Windows. WebView2 Runtime is required. |
 | macOS | Basic path support | Basic path detection for RimWorld, Steam, user data, Player.log, and Steam launch paths is available. Packaging quality is not promised yet. |
-| Linux | In progress | Some Steam path detection has been added, but desktop runtime, Steamworks, and packaging are not guaranteed yet. |
+| Linux | Supported from source in the [YX14ng/RimCrow](https://github.com/YX14ng/RimCrow) fork | Desktop mode (Qt WebEngine), native RimWorld detection, SteamCMD downloads, direct and Steam launch, and game process monitoring. Developed on Arch Linux; no packaged release. See [Linux](#linux). |
 
 ## Main Features
 
@@ -107,6 +107,30 @@ Run tests:
 ```powershell
 uv run pytest -q tests
 ```
+
+## Linux
+
+The Linux fixes live in the [YX14ng/RimCrow](https://github.com/YX14ng/RimCrow) fork and run from source.
+
+Requirements: `uv`, Node.js 18+ with npm, and the 32-bit runtime that SteamCMD needs (`lib32-gcc-libs` on Arch, usually already present if Steam is installed). The Qt WebEngine backend for the desktop window is installed by `uv sync`.
+
+```bash
+git clone --recurse-submodules https://github.com/YX14ng/RimCrow
+cd RimCrow
+uv sync
+(cd frontend && npm ci && npm run build)
+uv run python main.py            # desktop window
+uv run python main.py --browser  # or open it in the browser
+```
+
+Notes:
+
+- App data (`data/`, `cache/`, `tools/`, `backups/`, ...) is stored next to the program by default. Set `RIMCROW_DATA_HOME` to keep it elsewhere; the test suite uses this so it never touches real data.
+- RimWorld is detected from the Steam libraries; user data lives in `~/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios`. Direct launches and generated `.desktop` shortcuts use `LC_ALL=C`, like the game's own `start_RimWorld.sh`.
+- SteamCMD runs with a private `HOME`, so downloads and logs stay inside the SteamCMD folder instead of `~/Steam`.
+- Subscribing through the Steam client needs `SteamworksPy.so`: download the Steamworks SDK zip and run `uv run python scripts/setup_steamworks_runtime.py --sdk <zip>`, which compiles it with `g++`.
+- Not supported on Linux: editing the system hosts file (needs root) and registering non-Steam shortcuts in `shortcuts.vdf`. Window position is ignored on Wayland.
+- Run every check with `scripts/check.sh`.
 
 ## Translation
 

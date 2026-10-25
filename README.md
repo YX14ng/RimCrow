@@ -25,7 +25,7 @@ RimCrow（原名 RimModManager）是一个面向 **RimWorld** 的桌面模组管
 | --- | --- | --- |
 | Windows | 主要支持平台 | 桌面应用、打包和完整功能主要按 Windows 验证，需要 WebView2 Runtime。 |
 | macOS | 基础路径支持 | 主程序启动、RimWorld / Steam / 用户数据 / Player.log 定位和基础 Steam 启动路径可用；SteamworksPy 编译产物和打包质量暂不承诺。 |
-| Linux | 逐步补充 | 已扩展部分 Steam 路径识别，但桌面运行、Steamworks 和打包分发暂不保证。 |
+| Linux | [YX14ng/RimCrow](https://github.com/YX14ng/RimCrow) 分支可从源码运行 | 支持桌面模式（Qt WebEngine）、原生 RimWorld 识别、SteamCMD 下载、直接与 Steam 启动、游戏进程监控；在 Arch Linux 上开发，暂无打包版本，见 [Linux 运行](#linux-运行)。 |
 
 ## 主要功能
 
@@ -248,7 +248,7 @@ uv run python scripts/setup_steamworks_runtime.py
 tools/steamworks/
 ```
 
-当前 Windows 可直接复制 `submodules/SteamworksPy/redist/windows/SteamworksPy64.dll`。Linux 和 macOS 的 `SteamworksPy.so` / `SteamworksPy.dylib` 需要在对应平台用 Steamworks SDK 编译后放入 `tools/steamworks/`。
+当前 Windows 可直接复制 `submodules/SteamworksPy/redist/windows/SteamworksPy64.dll`。Linux 下脚本会用 SDK 里的头文件和 `libsteam_api.so` 自动编译 `SteamworksPy.so`（需要 `g++`）。macOS 的 `SteamworksPy.dylib` 仍需自行编译后放入 `tools/steamworks/`。
 
 说明：
 
@@ -303,6 +303,31 @@ uv run python scripts/validate_locale_quality.py --limit 200
 ```powershell
 uv run python scripts/analyze_i18n_duplicates.py --json
 ```
+
+
+## Linux 运行
+
+Linux 适配在 [YX14ng/RimCrow](https://github.com/YX14ng/RimCrow) 分支中，从源码运行。
+
+需要 `uv`、Node.js 18+（含 npm），以及 SteamCMD 需要的 32 位运行库（Arch 上是 `lib32-gcc-libs`，装了 Steam 一般已经有）。桌面窗口用的 Qt WebEngine 由 `uv sync` 一并安装。
+
+```bash
+git clone --recurse-submodules https://github.com/YX14ng/RimCrow
+cd RimCrow
+uv sync
+(cd frontend && npm ci && npm run build)
+uv run python main.py            # 桌面窗口
+uv run python main.py --browser  # 或在浏览器中打开
+```
+
+说明：
+
+- 运行数据（`data/`、`cache/`、`tools/`、`backups/` 等）默认放在程序目录；设置 `RIMCROW_DATA_HOME` 可以移到别处，测试也靠它避免碰到真实数据。
+- RimWorld 从 Steam 库中识别，用户数据在 `~/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios`。直接启动和生成的 `.desktop` 快捷方式与游戏自带的 `start_RimWorld.sh` 一样使用 `LC_ALL=C`。
+- SteamCMD 使用私有 `HOME` 运行，下载内容和日志都留在 SteamCMD 目录里，不会生成 `~/Steam`。
+- 通过 Steam 客户端订阅需要 `SteamworksPy.so`：下载 Steamworks SDK 压缩包后执行 `uv run python scripts/setup_steamworks_runtime.py --sdk <zip>`，脚本会用 `g++` 编译。
+- Linux 暂不支持：修改系统 hosts（需要 root）、向 `shortcuts.vdf` 注册非 Steam 快捷方式。Wayland 下窗口位置由合成器决定。
+- 完整校验：`scripts/check.sh`。
 
 ## 多语言与翻译贡献
 
