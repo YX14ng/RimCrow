@@ -247,6 +247,25 @@ class TestGameMonitorRuntimeSession(unittest.TestCase):
             with patch("backend.managers.mgr_game.platform.system", return_value="Linux"):
                 self.assertEqual(GameManager.detect_executable(str(install_root)), str(launcher_path))
 
+    def test_linux_launch_game_uses_c_locale_and_detached_session(self):
+        with TemporaryDirectory() as tmp:
+            install_root = Path(tmp)
+            exe_path = install_root / "RimWorldLinux"
+            exe_path.write_text("", encoding="utf-8")
+
+            with patch("backend.managers.mgr_game.platform.system", return_value="Linux"), \
+                 patch.dict("os.environ", {"LANG": "zh_CN.UTF-8", "LC_ALL": "zh_CN.UTF-8"}), \
+                 patch("backend.managers.mgr_game.subprocess.Popen") as popen:
+                GameManager.launch_game(str(install_root), ["-savedatafolder=/tmp/profile"])
+
+        cmd = popen.call_args.args[0]
+        kwargs = popen.call_args.kwargs
+        self.assertEqual(cmd, [str(exe_path), "-savedatafolder=/tmp/profile"])
+        # 与 start_RimWorld.sh 一致，非英语 locale 下游戏可能起不来。
+        self.assertEqual(kwargs["env"]["LC_ALL"], "C")
+        self.assertTrue(kwargs["start_new_session"])
+        self.assertEqual(kwargs["cwd"], str(install_root))
+
     def test_linux_launch_game_rejects_proton_windows_binary_for_direct_launch(self):
         with TemporaryDirectory() as tmp:
             install_root = Path(tmp)

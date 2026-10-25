@@ -147,7 +147,17 @@ class GameManager:
                 if target_exe.lower().endswith(".exe"):
                     raise Exception("Linux 下检测到 Windows 版 RimWorld，请通过 Steam/Proton 启动。")
                 cmd = [target_exe] + args
-                subprocess.Popen(cmd, cwd=game_install_path)
+                # 与官方 start_RimWorld.sh 一致使用 LC_ALL=C，非英语 locale 下游戏可能无法启动；
+                # 独立会话让游戏不随管理器或终端退出，也收不到发给管理器进程组的信号。
+                subprocess.Popen(
+                    cmd,
+                    cwd=game_install_path,
+                    env={**os.environ, "LC_ALL": "C"},
+                    start_new_session=True,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
             from backend.utils.logger import logger 
             logger.debug(f"通过游戏本体命令启动 RimWorld: {cmd}")
             return True
