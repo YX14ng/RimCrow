@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
 # 1. 引入配置管理
 from backend.managers.mgr_steamcmd_core import SteamCMDController
-from backend.settings import DATA_DIR, HOME_DIR, TOOL_MODS_DIR, settings, RULES_DIR
+from backend.settings import DATA_DIR, DATA_HOME_DIR, TOOL_MODS_DIR, settings, RULES_DIR
 from backend.utils.event_bus import EventBus
 from backend._version import __version__, __build__, get_all_changelogs
 from backend.utils.redaction import redact_sensitive_data
@@ -5573,7 +5573,7 @@ class API:
         """
         if not target_dir:
             # 默认下载到应用目录下的 Downloads
-            target_dir = str(HOME_DIR / 'Downloads')
+            target_dir = str(DATA_HOME_DIR / 'Downloads')
             os.makedirs(target_dir, exist_ok=True)
 
         candidates = self.github_mgr._github_download_candidates(url)

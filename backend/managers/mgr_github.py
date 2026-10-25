@@ -25,7 +25,7 @@ from backend.database.models import GithubModRecord, GithubTimeline, SystemInfo,
 from backend.i18n.messages import localized_key, localized_params, tr
 from backend.managers.mgr_download import DownloadManager, DownloadTask
 from backend.managers.mgr_network import build_retry_session, merge_headers, remaining_request_timeout
-from backend.settings import GITHUB_MIRROR_CATALOG_CACHE_PATH, GIT_PROVIDER_CATALOG_DIR, HOME_DIR, settings
+from backend.settings import DATA_HOME_DIR, GITHUB_MIRROR_CATALOG_CACHE_PATH, GIT_PROVIDER_CATALOG_DIR, settings
 from backend.utils.event_bus import EventBus
 from backend.utils.bundle_io import replace_dir_atomically
 from backend.utils.json_io import write_json_atomic
@@ -145,7 +145,7 @@ class GithubArtifactRequest:
 class GithubInstallPlan:
     """描述“拿到压缩包后怎么处理”，把安装策略和下载来源解耦。"""
     action: str = GITHUB_INSTALL_DOWNLOAD_ONLY
-    download_dir: str = str(HOME_DIR / "Downloads")
+    download_dir: str = str(DATA_HOME_DIR / "Downloads")
     extract_dir: str = ""
     move_target_dir: str = ""
     final_name: str = ""
@@ -1727,7 +1727,7 @@ class GithubManager:
             artifact=artifact_request,
             install=GithubInstallPlan(
                 action=GITHUB_INSTALL_EXTRACT_THEN_MOVE,
-                download_dir=str(HOME_DIR / "Downloads"),
+                download_dir=str(DATA_HOME_DIR / "Downloads"),
                 move_target_dir=self_mods_path,
                 final_name=final_name,
                 source_subpath=str(options.get("source_subpath") or ""),
@@ -1774,7 +1774,7 @@ class GithubManager:
             repo=safe_name,
             install=GithubInstallPlan(
                 action=GITHUB_INSTALL_EXTRACT_THEN_MOVE,
-                download_dir=str(HOME_DIR / "Downloads"),
+                download_dir=str(DATA_HOME_DIR / "Downloads"),
                 move_target_dir=self_mods_path,
                 final_name=str(record.local_folder or f"_GH_{safe_name}_{hashlib.sha256(catalog_url.encode()).hexdigest()[:12]}"),
                 source_resolver=GITHUB_RESOLVER_MOD_ROOT,
@@ -1935,7 +1935,7 @@ class GithubManager:
 
         artifact = request.artifact or GithubArtifactRequest()
         install = request.install or GithubInstallPlan()
-        download_dir = str(install.download_dir or HOME_DIR / "Downloads")
+        download_dir = str(install.download_dir or DATA_HOME_DIR / "Downloads")
 
         return GithubInstallRequest(
             repo_url=identity.url if identity else repo_url or f"https://github.com/{owner}/{repo}",
