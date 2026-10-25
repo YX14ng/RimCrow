@@ -54,6 +54,55 @@ class TestFileManager(unittest.TestCase):
             'explorer.exe /select,"C:\\Users\\Administrator\\AppData\\LocalLow\\Ludeon Studios\\RimWorld by Ludeon Studios\\Config\\Mod_1541721856_AlphaAnimals_Mod.xml"'
         )
 
+    def test_linux_open_path_does_not_wait_for_xdg_open(self):
+        with (
+            patch("backend.managers.mgr_files.platform.system", return_value="Linux"),
+            patch("backend.platform.runtime.is_windows", return_value=False),
+            patch("backend.platform.runtime.is_macos", return_value=False),
+            patch("backend.platform.runtime.subprocess.Popen") as popen,
+            patch("backend.managers.mgr_files.subprocess.call") as call,
+        ):
+            FileManager._open_with_system("/games/RimWorld/Mods", "打开路径")
+
+        call.assert_not_called()
+        # 没有桌面环境时 xdg-open 会在前台等文件管理器退出，必须放到独立会话里。
+        self.assertEqual(popen.call_args.args[0], ["xdg-open", "/games/RimWorld/Mods"])
+        self.assertTrue(popen.call_args.kwargs["start_new_session"])
+
+    def test_linux_open_in_explorer_selects_file_through_file_manager1(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "it's a mod.xml"
+            target.write_text("", encoding="utf-8")
+            with (
+                patch("backend.managers.mgr_files.platform.system", return_value="Linux"),
+                patch("backend.platform.runtime.shutil.which", return_value="/usr/bin/gdbus"),
+                patch("backend.platform.runtime.subprocess.run") as run,
+                patch("backend.managers.mgr_files.FileManager._open_with_system") as open_with_system,
+            ):
+                run.return_value.returncode = 0
+                FileManager.open_in_explorer(str(target))
+
+        command = run.call_args.args[0]
+        self.assertEqual(command[:2], ["/usr/bin/gdbus", "call"])
+        self.assertIn("org.freedesktop.FileManager1.ShowItems", command)
+        # URI 里的单引号已经百分号编码，不会破坏 GVariant 文本。
+        self.assertEqual(command[-2], f"['{target.as_uri()}']")
+        self.assertNotIn("'s", command[-2])
+        open_with_system.assert_not_called()
+
+    def test_linux_open_in_explorer_falls_back_to_parent_without_file_manager1(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "About.xml"
+            target.write_text("", encoding="utf-8")
+            with (
+                patch("backend.managers.mgr_files.platform.system", return_value="Linux"),
+                patch("backend.platform.runtime.shutil.which", return_value=None),
+                patch("backend.managers.mgr_files.FileManager._open_with_system") as open_with_system,
+            ):
+                FileManager.open_in_explorer(str(target))
+
+        open_with_system.assert_called_once_with(temp_dir, "打开路径")
+
     def test_webview_file_types_reject_missing_dot_after_star(self):
         with self.assertRaises(ValueError):
             parse_file_type("RimCrow Data Package (*rimcrowdata.zip)")

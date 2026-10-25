@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -38,7 +39,38 @@ def open_uri(uri: str) -> None:
     if is_macos():
         subprocess.Popen(["open", uri])
         return
-    subprocess.Popen(["xdg-open", uri])
+    # niri 这类没有桌面环境的会话里，xdg-open 会在前台等处理程序退出；放进独立会话，不阻塞调用方。
+    subprocess.Popen(
+        ["xdg-open", uri],
+        start_new_session=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def reveal_in_file_manager(path: str) -> bool:
+    """Linux 下通过 FileManager1 D-Bus 接口在文件管理器里选中文件；接口不可用时返回 False。"""
+    gdbus = shutil.which("gdbus")
+    if not gdbus:
+        return False
+    # as_uri 会把单引号等字符百分号编码，拼进 GVariant 文本是安全的。
+    items = f"['{Path(os.path.abspath(path)).as_uri()}']"
+    command = [
+        gdbus, "call", "--session",
+        "--dest", "org.freedesktop.FileManager1",
+        "--object-path", "/org/freedesktop/FileManager1",
+        "--method", "org.freedesktop.FileManager1.ShowItems",
+        items, "",
+    ]
+    try:
+        result = subprocess.run(command, capture_output=True, timeout=10)
+    except subprocess.TimeoutExpired:
+        # 文件管理器还在被 D-Bus 激活，窗口稍后会出现，不再回退打开目录，避免弹两个窗口。
+        return True
+    except OSError:
+        return False
+    return result.returncode == 0
 
 
 def get_restart_command(executable_path: str = "", *, main_script: str | Path | None = None) -> list[str]:

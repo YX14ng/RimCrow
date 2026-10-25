@@ -16,6 +16,7 @@ from backend.paths.core import (
     normalize_path_for_storage as core_normalize_path_for_storage,
     same_path as core_same_path,
 )
+from backend.platform.runtime import open_uri
 
 def _dedupe_preserve_order(values: list[str]) -> list[str]:
     """对字符串列表做保序去重。"""
@@ -183,6 +184,10 @@ def open_system_uri(uri: Any) -> bool:
         return True
     if sys.platform == "darwin":
         subprocess.Popen(["open", target_uri])
+        return True
+    if sys.platform.startswith("linux"):
+        # webbrowser 可能把 steam:// 交给浏览器；xdg-open 按协议找处理程序。
+        open_uri(target_uri)
         return True
     return bool(webbrowser.open(target_uri))
 

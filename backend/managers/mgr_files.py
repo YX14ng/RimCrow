@@ -25,6 +25,7 @@ from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_network import build_retry_session, merge_headers
 from backend.paths.game_locations import normalize_steam_root, resolve_steam_executable_path, resolve_steamcmd_executable_path
 from backend.paths.rimworld_layout import normalize_rimworld_install_root
+from backend.platform.runtime import open_uri, reveal_in_file_manager
 from backend.i18n.messages import localized_key, localized_params, tr
 from backend.scanner.parser_xml import ModXMLParser
 from backend.profile import UserDataRoot
@@ -503,7 +504,7 @@ class FileManager:
             elif system_name == 'Darwin':
                 subprocess.call(['open', target_path])
             else:
-                subprocess.call(['xdg-open', target_path])
+                open_uri(target_path)
             return None
         except Exception as e:
             raise Exception(f"{action_label}时出错: {e}")
@@ -617,13 +618,15 @@ class FileManager:
         if os.path.isfile(path):
             system_name = platform.system()
             try:
-                # Windows 和 macOS 支持直接选中文件；Linux 桌面环境差异较大，退回打开父目录更稳定。
+                # Windows 和 macOS 支持直接选中文件；Linux 先试 FileManager1，不支持时退回打开父目录。
                 if system_name == 'Windows':
                     normalized_path = os.path.normpath(path)
                     subprocess.Popen(f'explorer.exe /select,"{normalized_path}"')
                     return None
                 if system_name == 'Darwin':
                     subprocess.call(['open', '-R', path])
+                    return None
+                if system_name == 'Linux' and reveal_in_file_manager(path):
                     return None
             except Exception as e:
                 raise Exception(f"打开所在目录时出错: {e}")
