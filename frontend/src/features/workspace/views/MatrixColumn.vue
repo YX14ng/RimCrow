@@ -205,7 +205,9 @@ const getModsData = (pathHashes, type = null) => {
 const getShortPathLabel = (path, fallback = t('ui.workspace.common.missing_record', '缺失记录')) => {
   if (!path) return fallback
   const parts = String(path).split(/[\\/]/).filter(Boolean)
-  return parts.slice(-2).join('\\') || path
+  // Linux 路径没有反斜杠，沿用原路径的分隔符
+  const separator = String(path).includes('\\') ? '\\' : '/'
+  return parts.slice(-2).join(separator) || path
 }
 
 const buildCountText = (count) => count > 1 ? t('common.count.suffix_spaced', ' ({count} 项)', { count }) : ''
