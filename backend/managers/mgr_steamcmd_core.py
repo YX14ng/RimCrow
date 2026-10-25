@@ -200,8 +200,8 @@ class SteamCMDController:
                     creationflags=subprocess.CREATE_NO_WINDOW
                 )
             else:
-                # Linux/Mac: 使用 os.killpg 杀进程组（进程以独立会话启动，组里只有 SteamCMD）
-                os.killpg(os.getpgid(pid), signal.SIGTERM)
+                # Linux/Mac: 使用 os.killpg 杀进程组（进程以独立会话启动，组号就是 pid，组里只有 SteamCMD）
+                os.killpg(pid, signal.SIGTERM)
         except Exception as e:
             logger.error(f"强制击杀 SteamCMD 失败: {e}")
         finally:

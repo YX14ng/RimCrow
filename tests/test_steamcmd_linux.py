@@ -85,7 +85,8 @@ def test_terminate_steamcmd_process_kills_whole_process_group(monkeypatch):
     monkeypatch.setattr("backend.managers.mgr_steam.platform.system", lambda: "Linux")
     killpg = Mock()
     monkeypatch.setattr("backend.managers.mgr_steam.os.killpg", killpg)
-    monkeypatch.setattr("backend.managers.mgr_steam.os.getpgid", lambda pid: pid)
+    # 不能先 getpgid：一旦进程没有独立会话，查到的就是 RimCrow 自己的进程组。
+    monkeypatch.setattr("backend.managers.mgr_steam.os.getpgid", Mock(side_effect=AssertionError("getpgid")))
     manager = object.__new__(SteamManager)
     manager._steamcmd_lock = threading.Lock()
     process = Mock(spec=subprocess.Popen, pid=4321)
@@ -95,3 +96,40 @@ def test_terminate_steamcmd_process_kills_whole_process_group(monkeypatch):
     # steamcmd.sh 不 exec，只杀包装脚本会留下 linux32/steamcmd 继续下载。
     killpg.assert_called_once_with(4321, signal.SIGKILL)
     process.kill.assert_not_called()
+
+
+def test_steamcmd_batch_runs_in_its_own_session(monkeypatch, tmp_path):
+    monkeypatch.setattr("backend.managers.mgr_steam.platform.system", lambda: "Linux")
+    captured = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured.update(kwargs)
+        raise OSError("stop after capture")
+
+    monkeypatch.setattr("backend.managers.mgr_steam.subprocess.Popen", fake_popen)
+    manager = object.__new__(SteamManager)
+    manager.steamcmd_exe = str(tmp_path / "steamcmd.sh")
+    manager.steamcmd_dir = str(tmp_path)
+    manager._steamcmd_lock = threading.Lock()
+    manager._steamcmd_processes = {}
+    manager._build_steamcmd_download_script = lambda batch: tmp_path / "job.txt"
+    manager._emit_progress_event = lambda *args, **kwargs: None
+
+    try:
+        manager._run_single_steamcmd_batch(
+            batch=["818773962"],
+            task_id="task-a",
+            current_env={},
+            completed_ids=set(),
+            failed_ids=set(),
+            current_item_idx_ref=[0],
+            total_items=1,
+            workshop_log_path=tmp_path / "workshop_log.txt",
+            target_dir=str(tmp_path),
+            debug_show_console=False,
+        )
+    except OSError:
+        pass
+
+    # 终止时按进程组 SIGKILL；没有独立会话的话，这个组就是 RimCrow 自己。
+    assert captured["start_new_session"] is True

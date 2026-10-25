@@ -2449,7 +2449,8 @@ class SteamManager:
                 )
             else:
                 # steamcmd.sh 不 exec，只杀包装脚本会留下 linux32/steamcmd 继续运行。
-                os.killpg(os.getpgid(active_process.pid), signal.SIGKILL)
+                # 进程以独立会话启动，组号就是 pid；不用 getpgid，万一没有独立会话也不会误杀 RimCrow 自己。
+                os.killpg(active_process.pid, signal.SIGKILL)
         except Exception as e:
             logger.debug(f"终止 SteamCMD 任务失败：task_id={task_id} error={e}")
 
