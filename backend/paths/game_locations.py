@@ -191,7 +191,8 @@ def resolve_steam_executable_path(steam_root: str, system_name: str | None = Non
         return str(candidate) if candidate.exists() else ""
 
     for candidate in [Path(root) / "steam.sh", Path(root) / "steam"]:
-        if candidate.exists():
+        # `~/.steam/steam` 是指向根目录的链接，存在但不能执行。
+        if candidate.is_file() and os.access(candidate, os.X_OK):
             return str(candidate)
     return ""
 
@@ -216,9 +217,23 @@ def normalize_steam_root(path: str, system_name: str | None = None) -> str:
     if resolved_system_name == "Windows" and target.name.lower() == "steam.exe":
         return normalize_path_for_storage(target.parent, system_name=resolved_system_name)
 
-    if resolved_system_name != "Windows" and target.name in {"steam.sh", "steam"}:
-        return normalize_path_for_storage(target.parent, system_name=resolved_system_name)
+    if resolved_system_name != "Windows":
+        return _normalize_posix_steam_root(raw_value, target, resolved_system_name)
 
+    return raw_value
+
+
+def _normalize_posix_steam_root(raw_value: str, target, system_name: str) -> str:
+    # 只有指向文件时才去掉 steam.sh / steam；`~/.steam/steam` 本身就是根目录的链接。
+    if target.name in {"steam.sh", "steam"} and not os.path.isdir(raw_value):
+        raw_value = normalize_path_for_storage(target.parent, system_name=system_name)
+    # `~/.steam` 只放 root/steam 链接和 registry.vdf，真正的根目录在 root 链接后面。
+    dot_steam_root = os.path.join(raw_value, "root")
+    if not os.path.isdir(os.path.join(raw_value, "steamapps")) and os.path.islink(dot_steam_root) and os.path.isdir(dot_steam_root):
+        raw_value = dot_steam_root
+    # libraryfolders.vdf 和 steamapps 记录的都是真实路径，链接位置统一成真实目录才能对上。
+    if os.path.islink(raw_value) and os.path.isdir(raw_value):
+        return normalize_path_for_storage(os.path.realpath(raw_value), system_name=system_name)
     return raw_value
 
 

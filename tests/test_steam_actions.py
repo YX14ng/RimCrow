@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import tarfile
 import threading
@@ -15,6 +16,7 @@ from backend.paths.game_locations import (
     get_default_steam_data_root_candidates,
     get_default_steam_root_candidates,
     normalize_steam_root,
+    resolve_steam_executable_path,
 )
 from backend.settings import settings
 
@@ -164,6 +166,7 @@ class TestSteamActionReadiness(unittest.TestCase):
         steam_root.mkdir()
         steamcmd_root.mkdir()
         (steam_root / "steam").write_text("", encoding="utf-8")
+        (steam_root / "steam").chmod(0o755)
 
         manager = object.__new__(SteamManager)
         manager.steamcmd_dir = "old"
@@ -246,6 +249,28 @@ class TestSteamActionReadiness(unittest.TestCase):
         with patch("backend.paths.game_locations.platform.system", return_value="Darwin"):
             self.assertEqual(normalize_steam_root(app_path), "/Applications")
             self.assertEqual(normalize_steam_root(exe_path), "/Applications")
+
+    @unittest.skipIf(os.name == "nt", "Linux 的 ~/.steam 符号链接布局")
+    def test_linux_dot_steam_links_normalize_to_real_root_and_executable(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(temp_root, ignore_errors=True))
+        real_root = temp_root / ".local" / "share" / "Steam"
+        (real_root / "steamapps").mkdir(parents=True)
+        steam_sh = real_root / "steam.sh"
+        steam_sh.write_text("#!/bin/sh\n", encoding="utf-8")
+        steam_sh.chmod(0o755)
+        dot_steam = temp_root / ".steam"
+        dot_steam.mkdir()
+        (dot_steam / "root").symlink_to(real_root)
+        (dot_steam / "steam").symlink_to(real_root)
+
+        with patch("backend.paths.game_locations.platform.system", return_value="Linux"):
+            # ~/.steam/steam 是目录链接，不能当成可执行文件把它去掉；旧配置里存下的 ~/.steam 也要纠正。
+            for raw_path in (dot_steam / "steam", dot_steam / "root", dot_steam, steam_sh, real_root):
+                with self.subTest(raw_path=str(raw_path)):
+                    self.assertEqual(normalize_steam_root(str(raw_path)), str(real_root.resolve()))
+            self.assertEqual(resolve_steam_executable_path(str(real_root)), str(steam_sh))
+            self.assertEqual(resolve_steam_executable_path(str(dot_steam)), "")
 
     def test_default_steam_root_candidates_prefer_macos_applications_dirs(self):
         with patch("backend.paths.game_locations.platform.system", return_value="Darwin"), \
