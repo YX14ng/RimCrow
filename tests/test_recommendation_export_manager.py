@@ -5,6 +5,8 @@ from zipfile import ZipFile
 from PIL import Image
 
 from backend.api import API
+from types import SimpleNamespace
+
 from backend.managers.mgr_recommendation_export import RecommendationExportManager
 
 
@@ -353,3 +355,31 @@ def test_recommendation_export_dialogs_start_from_desktop(tmp_path: Path):
 
     assert save_dialog.call_args.kwargs["initial_dir"] == str(tmp_path)
     assert folder_dialog.call_args.args[0] == str(tmp_path)
+
+
+def test_linux_font_lookup_falls_back_to_fontconfig(monkeypatch, tmp_path):
+    from backend.managers import mgr_recommendation_export as export_module
+
+    font_file = tmp_path / "LXGWWenKai-Regular.ttf"
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return SimpleNamespace(returncode=0, stdout=f"{font_file}: \n{font_file}: \n")
+
+    monkeypatch.setattr(export_module.shutil, "which", lambda name: "/usr/bin/fc-list" if name == "fc-list" else None)
+    monkeypatch.setattr(export_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(export_module.platform, "system", lambda: "Linux")
+
+    # 各发行版的 Noto CJK 路径不同（Arch 在 /usr/share/fonts/noto-cjk），固定列表找不到时交给 fontconfig。
+    assert export_module._fontconfig_cjk_fonts(truetype_only=True) == [str(font_file)]
+    assert calls[0] == ["/usr/bin/fc-list", ":lang=zh-cn:fontformat=TrueType", "file"]
+    assert RecommendationExportManager._font_candidates(truetype_only=True)[-1] == str(font_file)
+
+
+def test_fontconfig_lookup_without_fc_list_returns_empty(monkeypatch):
+    from backend.managers import mgr_recommendation_export as export_module
+
+    monkeypatch.setattr(export_module.shutil, "which", lambda name: None)
+
+    assert export_module._fontconfig_cjk_fonts() == []

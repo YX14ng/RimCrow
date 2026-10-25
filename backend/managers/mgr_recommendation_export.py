@@ -4,6 +4,7 @@ import html
 import platform
 import re
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any, TypeAlias
@@ -28,6 +29,26 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 # Pillow 的默认字体和 TrueType 字体类型不同，统一成别名可以让图片排版函数保持清晰。
 PillowFont: TypeAlias = ImageFont.ImageFont | ImageFont.FreeTypeFont
+
+
+def _fontconfig_cjk_fonts(*, truetype_only: bool = False) -> list[str]:
+    """
+    各 Linux 发行版的中文字体路径不同，向 fontconfig 列出覆盖简体中文的字体文件。
+
+    reportlab 读不了 CFF 轮廓（Noto CJK 就是），PDF 只能用 TrueType 轮廓的字体。
+    """
+    fc_list = shutil.which("fc-list")
+    if not fc_list:
+        return []
+    pattern = ":lang=zh-cn" + (":fontformat=TrueType" if truetype_only else "")
+    try:
+        result = subprocess.run([fc_list, pattern, "file"], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode != 0:
+        return []
+    # 每行形如 "/usr/share/fonts/xxx.ttf: "；排序让同一台机器上的结果稳定。
+    return sorted({line.split(":", 1)[0].strip() for line in result.stdout.splitlines() if line.strip()})
 
 
 class RecommendationExportManager:
@@ -557,16 +578,24 @@ class RecommendationExportManager:
             return "PingFang SC"
         return "Noto Sans CJK SC"
 
-    def _register_pdf_font(self) -> str:
+    @staticmethod
+    def _font_candidates(bold: bool = False, *, truetype_only: bool = False) -> list[str]:
         candidates = [
-            "C:/Windows/Fonts/msyh.ttc",
+            "C:/Windows/Fonts/msyhbd.ttc" if bold else "C:/Windows/Fonts/msyh.ttc",
             "C:/Windows/Fonts/simhei.ttf",
             "/System/Library/Fonts/PingFang.ttc",
             "/System/Library/Fonts/STHeiti Light.ttc",
             "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
             "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
             "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
+            "/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc" if bold else "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
         ]
+        if platform.system() == "Linux":
+            candidates.extend(_fontconfig_cjk_fonts(truetype_only=truetype_only))
+        return candidates
+
+    def _register_pdf_font(self) -> str:
+        candidates = self._font_candidates(truetype_only=True)
         for candidate in candidates:
             try:
                 if Path(candidate).is_file():
@@ -764,13 +793,7 @@ class RecommendationExportManager:
         return result or [""]
 
     def _load_font(self, size: int, bold: bool = False) -> PillowFont:
-        candidates = [
-            "C:/Windows/Fonts/msyhbd.ttc" if bold else "C:/Windows/Fonts/msyh.ttc",
-            "C:/Windows/Fonts/simhei.ttf",
-            "/System/Library/Fonts/PingFang.ttc",
-            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        ]
+        candidates = self._font_candidates(bold)
         for candidate in candidates:
             try:
                 if Path(candidate).is_file():
