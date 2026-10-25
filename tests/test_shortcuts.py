@@ -87,6 +87,51 @@ class TestShortcutHelpers(unittest.TestCase):
         self.assertIn("Terminal=false", content)
         self.assertTrue(os.access(shortcut_path, os.X_OK))
 
+    @patch("backend.utils.shortcuts.platform.system", return_value="Linux")
+    def test_linux_desktop_exec_follows_desktop_entry_quoting(self, _platform_system):
+        shortcut_path = self.desktop_dir / "Quoted.desktop"
+        create_shortcut(
+            {
+                "shortcut_path": str(shortcut_path),
+                "target_path": str(self.target_path),
+                "arguments": "'-savedatafolder=/tmp/my profile' 100% '$HOME' 'a\\b'",
+                "environment": {"LC_ALL": "C"},
+                "shortcut_kind": "desktop",
+            }
+        )
+
+        exec_line = next(line for line in shortcut_path.read_text(encoding="utf-8").splitlines() if line.startswith("Exec="))
+        # Desktop Entry 规范：保留字符用双引号，% 写成 %%，引号内的反斜杠还要再按字符串规则转义一次。
+        self.assertEqual(
+            exec_line,
+            f'Exec=env LC_ALL=C {self.target_path} "-savedatafolder=/tmp/my profile" 100%% "\\\\$HOME" "a\\\\\\\\b"',
+        )
+
+    @patch("backend.utils.shortcuts.platform.system", return_value="Linux")
+    @patch("backend.managers.mgr_files.platform.system", return_value="Linux")
+    @patch("backend.managers.mgr_files.get_desktop_directory")
+    @patch("backend.managers.mgr_files.GameManager.detect_executable")
+    def test_linux_direct_profile_shortcut_uses_c_locale_and_game_icon(
+        self,
+        detect_executable,
+        get_desktop_directory,
+        _files_platform,
+        _platform_system,
+    ):
+        game_exe = self.temp_dir / "RimWorldLinux"
+        game_exe.write_text("", encoding="utf-8")
+        icon = self.temp_dir / "RimWorldLinux_Data" / "Resources" / "UnityPlayer.png"
+        icon.parent.mkdir(parents=True)
+        icon.write_bytes(b"png")
+        detect_executable.return_value = str(game_exe)
+        get_desktop_directory.return_value = str(self.desktop_dir)
+
+        spec = FileManager.build_profile_shortcut_spec(profile=self._profile())
+
+        # 直接启动要和 start_RimWorld.sh 一样带 LC_ALL=C；图标用游戏自带的 PNG，而不是可执行文件。
+        self.assertEqual(spec["environment"], {"LC_ALL": "C"})
+        self.assertEqual(spec["icon_location"], str(icon))
+
     @patch("backend.utils.shortcuts.platform.system", return_value="Darwin")
     def test_create_shortcut_writes_macos_command_file(self, _platform_system):
         shortcut_path = self.desktop_dir / "Demo.command"

@@ -1008,7 +1008,7 @@ class FileManager:
         steam_exe_path: str | None = None,
         destination_dir: str | None = None,
         steam_app_id: str = RIMWORLD_STEAM_APP_ID_STR,
-    ) -> Dict[str, str]:
+    ) -> Dict[str, Any]:
         """
         根据环境启动逻辑构造桌面快捷方式定义。
         这里复用后端现有的启动参数，而不是前端重复拼命令，避免两边逻辑漂移。
@@ -1044,6 +1044,14 @@ class FileManager:
                 # 使用游戏图标更直观，点击目标仍然是 Steam.exe。
                 icon_location = os.path.abspath(game_exe)
 
+        environment: Dict[str, str] = {}
+        if platform.system() == "Linux":
+            # .desktop 的 Icon 不能指向可执行文件；Unity 的 Linux 版把游戏图标放在 <exe>_Data/Resources 下。
+            icon_location = FileManager._find_linux_game_icon(game_install_path, game_exe) or ""
+            if target_path == os.path.abspath(game_exe):
+                # 与 start_RimWorld.sh 一致，非英语 locale 下游戏可能无法启动。
+                environment["LC_ALL"] = "C"
+
         return {
             "shortcut_path": shortcut_path,
             "target_path": target_path,
@@ -1051,8 +1059,18 @@ class FileManager:
             "working_directory": working_directory,
             "icon_location": icon_location,
             "description": description,
+            "environment": environment,
             "shortcut_kind": shortcut_kind,
         }
+
+    @staticmethod
+    def _find_linux_game_icon(game_install_path: str, game_exe: str) -> str:
+        install_root = Path(game_install_path)
+        for data_dir_name in (f"{Path(game_exe).stem}_Data", "RimWorldLinux_Data"):
+            icon_path = install_root / data_dir_name / "Resources" / "UnityPlayer.png"
+            if icon_path.is_file():
+                return str(icon_path)
+        return ""
 
     @staticmethod
     def create_profile_desktop_shortcut(

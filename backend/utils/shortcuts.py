@@ -193,6 +193,34 @@ def create_windows_url_shortcut(
     }
 
 
+_DESKTOP_EXEC_RESERVED = set(' \t\n"\'\\><~|&;$*?#()`')
+
+
+def _quote_desktop_exec_arg(value: str) -> str:
+    """
+    按 Desktop Entry 规范引用 Exec 参数。
+
+    含保留字符的参数整体加双引号，其中的 `"`、`` ` ``、`$`、`\\` 前加反斜杠；
+    `%` 一律写成 `%%`；Exec 是字符串类型，所有反斜杠最后还要再转义一次。
+    """
+    text = str(value).replace("%", "%%")
+    if text and not any(char in _DESKTOP_EXEC_RESERVED for char in text):
+        return text
+    escaped = "".join("\\" + char if char in '"`$\\' else char for char in text)
+    return '"' + escaped.replace("\\", "\\\\") + '"'
+
+
+def _split_shortcut_arguments(arguments: str) -> list[str]:
+    # format_shortcut_arguments 在 POSIX 下用 shlex.quote 拼接，这里还原成参数列表再按规范引用。
+    text = str(arguments or "").strip()
+    if not text:
+        return []
+    try:
+        return shlex.split(text)
+    except ValueError:
+        return text.split()
+
+
 def create_linux_desktop_shortcut(
     shortcut_path: str,
     target_path: str = "",
@@ -201,6 +229,7 @@ def create_linux_desktop_shortcut(
     icon_location: str = "",
     description: str = "",
     url: str = "",
+    environment: Dict[str, str] | None = None,
     **_: Any,
 ) -> Dict[str, Any]:
     if platform.system() != "Linux":
@@ -216,13 +245,15 @@ def create_linux_desktop_shortcut(
         os.makedirs(shortcut_dir, exist_ok=True)
 
     if normalized_url:
-        exec_value = f"xdg-open {shlex.quote(normalized_url)}"
+        argv = ["xdg-open", normalized_url]
     else:
         if not normalized_target or not os.path.exists(normalized_target):
             raise FileNotFoundError(f"快捷方式目标不存在: {normalized_target}")
-        exec_value = shlex.quote(normalized_target)
-        if str(arguments or "").strip():
-            exec_value = f"{exec_value} {str(arguments).strip()}"
+        argv = [normalized_target, *_split_shortcut_arguments(arguments)]
+    env_assignments = [f"{key}={value}" for key, value in (environment or {}).items()]
+    if env_assignments:
+        argv = ["env", *env_assignments, *argv]
+    exec_value = " ".join(_quote_desktop_exec_arg(arg) for arg in argv)
 
     lines = [
         "[Desktop Entry]",
@@ -251,6 +282,7 @@ def create_linux_desktop_shortcut(
         "icon_location": normalized_icon,
         "description": str(description or "").strip(),
         "url": normalized_url,
+        "environment": dict(environment or {}),
         "shortcut_kind": "desktop",
     }
 
@@ -337,7 +369,7 @@ def create_shortcut(spec: Dict[str, Any]) -> Dict[str, Any]:
             icon_location=payload["icon_location"],
         )
     if kind == "desktop":
-        return create_linux_desktop_shortcut(**payload)
+        return create_linux_desktop_shortcut(**payload, environment=dict(spec.get("environment") or {}))
     if kind == "command":
         return create_macos_command_shortcut(**payload)
     raise ValueError(f"不支持的快捷方式类型: {kind}")
