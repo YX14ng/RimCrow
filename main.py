@@ -103,7 +103,11 @@ else:
         app_path = os.path.dirname(sys.executable)
     if app_path not in sys.path:
         sys.path.insert(0, app_path)
-    
+
+# Linux 下 pywebview 默认先试 GTK，而依赖里只带了 Qt；直接指定 Qt，避免每次启动都打印 GTK 导入失败的堆栈。
+if sys.platform.startswith("linux"):
+    os.environ.setdefault("PYWEBVIEW_GUI", "qt")
+
 def get_webview_proxy_args():
     """生成 WebView2 的启动参数"""
     cfg = settings.config.network.proxy
