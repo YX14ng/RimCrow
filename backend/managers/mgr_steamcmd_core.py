@@ -1,5 +1,7 @@
 import os
+import shutil
 import subprocess
+import sys
 import time
 import re
 import signal
@@ -7,6 +9,30 @@ from pathlib import Path
 from backend.i18n.messages import tr
 from backend.utils.logger import logger
 from backend.settings import settings
+
+STEAMCMD_PRIVATE_HOME = ".home"
+
+
+def prepare_steamcmd_env(env: dict, steamcmd_dir: str) -> dict:
+    """
+    Linux 版 SteamCMD 把下载内容和日志写到 $HOME/Steam，而不是自身目录。
+
+    给它一个私有 HOME，其中 Steam 链回 SteamCMD 目录：内容和日志就与 Windows 一样落在
+    <steamcmd>/steamapps 与 <steamcmd>/logs，也不会在用户主目录下多出一个 ~/Steam。
+    """
+    if not sys.platform.startswith("linux"):
+        return env
+    steamcmd_root = Path(steamcmd_dir).resolve()
+    private_home = steamcmd_root / STEAMCMD_PRIVATE_HOME
+    steam_link = private_home / "Steam"
+    private_home.mkdir(parents=True, exist_ok=True)
+    if steam_link.is_symlink() and steam_link.resolve() != steamcmd_root:
+        steam_link.unlink()
+    if not steam_link.exists() and not steam_link.is_symlink():
+        steam_link.symlink_to(steamcmd_root, target_is_directory=True)
+    env["HOME"] = str(private_home)
+    return env
+
 
 class SteamCMDController:
     def __init__(self, steamcmd_exe_path: str):
@@ -23,7 +49,7 @@ class SteamCMDController:
         if settings.config.network.use_proxy_on_steamcmd:
             from backend.managers.mgr_network import network_mgr
             env.update(network_mgr.get_proxy_env())
-        return env
+        return prepare_steamcmd_env(env, self.steamcmd_dir)
 
     def initialize_steamcmd(self, on_progress=None):
         """
@@ -44,16 +70,19 @@ class SteamCMDController:
         )
 
     def _clean_corrupted_init(self):
-        """清理失败的初始化残留文件 (仅保留 steamcmd.exe)"""
+        """清理失败的初始化残留文件 (仅保留引导程序)"""
         if not Path(self.steamcmd_exe).exists(): return
-            
+        # Linux 下 steamcmd.sh 只是包装脚本，真正的引导程序在 linux32 里。
+        keep_names = {Path(self.steamcmd_exe).name.lower()}
+        if os.name != 'nt':
+            keep_names.add('linux32')
+
         for item in Path(self.steamcmd_dir).iterdir():
-            if item.name.lower() != 'steamcmd.exe':
+            if item.name.lower() not in keep_names:
                 try:
-                    if item.is_file():
+                    if item.is_symlink() or item.is_file():
                         item.unlink()
                     elif item.is_dir():
-                        import shutil
                         shutil.rmtree(item)
                 except Exception as e:
                     logger.warning(f"清理残留文件失败 {item.name}: {e}")
@@ -85,6 +114,8 @@ class SteamCMDController:
                 stdin=None if debug_show_console else subprocess.PIPE,    # 非调试模式保留 stdin 防止 SteamCMD 等待用户输入卡死
                 startupinfo=startupinfo,
                 creationflags=creationflags,
+                # 独立会话：kill_all 按进程组终止时不会波及 RimCrow 自己。
+                start_new_session=os.name != 'nt',
                 text=True,
                 encoding='utf-8',         # SteamCMD 有时会有乱码
                 errors='replace'
@@ -169,8 +200,7 @@ class SteamCMDController:
                     creationflags=subprocess.CREATE_NO_WINDOW
                 )
             else:
-                # Linux/Mac: 使用 os.killpg 杀进程组
-                import signal
+                # Linux/Mac: 使用 os.killpg 杀进程组（进程以独立会话启动，组里只有 SteamCMD）
                 os.killpg(os.getpgid(pid), signal.SIGTERM)
         except Exception as e:
             logger.error(f"强制击杀 SteamCMD 失败: {e}")

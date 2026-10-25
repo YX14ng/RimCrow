@@ -11,6 +11,7 @@ import tarfile
 import threading
 import time
 import shutil
+import signal
 import importlib.util
 import uuid
 import struct
@@ -45,7 +46,7 @@ from backend.i18n.messages import tr
 from backend.managers.mgr_network import network_mgr
 from backend.utils.event_bus import EventBus
 from backend.managers.mgr_download import TaskStatus
-from backend.managers.mgr_steamcmd_core import SteamCMDController
+from backend.managers.mgr_steamcmd_core import SteamCMDController, prepare_steamcmd_env
 from backend.managers.mgr_game import GameManager
 from backend.paths.core import path_key
 from backend.paths.game_locations import (
@@ -1441,7 +1442,7 @@ class SteamManager:
             logger.info("SteamCMD 将使用代理运行。")
         else:
             logger.info("SteamCMD 不注入应用代理，沿用外部环境代理设置。")
-        return current_env
+        return prepare_steamcmd_env(current_env, self.steamcmd_dir)
 
     def _run_steamcmd_workshop_repair_process(self, mod_ids: list[str], task_id: str, on_success=None):
         from backend.managers.mgr_files import FileManager
@@ -1826,6 +1827,8 @@ class SteamManager:
                 text=False,
                 startupinfo=startupinfo,
                 creationflags=creationflags,
+                # 独立会话，终止时按进程组连同 linux32/steamcmd 一起结束。
+                start_new_session=platform.system() != "Windows",
                 cwd=self.steamcmd_dir,
                 bufsize=1,
             )
@@ -2445,7 +2448,8 @@ class SteamManager:
                     creationflags=subprocess.CREATE_NO_WINDOW,
                 )
             else:
-                active_process.kill()
+                # steamcmd.sh 不 exec，只杀包装脚本会留下 linux32/steamcmd 继续运行。
+                os.killpg(os.getpgid(active_process.pid), signal.SIGKILL)
         except Exception as e:
             logger.debug(f"终止 SteamCMD 任务失败：task_id={task_id} error={e}")
 
