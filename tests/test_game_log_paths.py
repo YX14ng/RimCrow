@@ -1,3 +1,4 @@
+import ntpath
 import os
 import shutil
 import subprocess
@@ -16,6 +17,7 @@ from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_game_logs import GameLogManager, LogAnalyzer
 from backend.managers.mgr_game_monitor import RuntimeSession
 from backend.utils.logger import AppLogReader, BaseLogReader
+from tests.host_paths import NON_DARWIN_SYSTEM
 
 
 class _DefinitionManagerStub:
@@ -73,11 +75,12 @@ class TestGameLogPathResolution(unittest.TestCase):
             paths = GameManager.get_default_player_log_paths("Player.log")
 
         user_data = fake_home / "AppData" / "LocalLow" / "Ludeon Studios" / "RimWorld by Ludeon Studios"
+        # 模拟 Windows 时路径按 ntpath 规范化，非 Windows 主机上也要按同样规则比较。
         self.assertEqual(paths, [
             # RimWorld 1.7 (Waylith engine) writes the player log into Logs/ ...
-            str(user_data / "Logs" / "Player.log"),
+            ntpath.normpath(str(user_data / "Logs" / "Player.log")),
             # ... while 1.6 and earlier used the user data root.
-            str(user_data / "Player.log"),
+            ntpath.normpath(str(user_data / "Player.log")),
         ])
 
     def test_macos_default_player_log_paths_cover_unity_and_company_locations(self):
@@ -135,7 +138,7 @@ class TestGameLogPathResolution(unittest.TestCase):
                 ("1.10.1234", new_path),
             ):
                 with self.subTest(filename=filename, version=version), \
-                     patch("backend.managers.mgr_game.platform.system", return_value="Windows"), \
+                     patch("backend.managers.mgr_game.platform.system", return_value=NON_DARWIN_SYSTEM), \
                      patch("backend.paths.game_locations.get_default_user_data_paths", return_value=[str(default_root)]):
                     manager.context.game_version = version
                     self.assertEqual(manager.resolve_log_file_path(filename), str(expected))
@@ -152,7 +155,7 @@ class TestGameLogPathResolution(unittest.TestCase):
         old_path.touch()
         new_path.touch()
         manager = GameLogManager(SimpleNamespace(user_data_path="", game_version=""))
-        with patch("backend.managers.mgr_game.platform.system", return_value="Windows"), \
+        with patch("backend.managers.mgr_game.platform.system", return_value=NON_DARWIN_SYSTEM), \
              patch("backend.paths.game_locations.get_default_user_data_paths", return_value=[str(default_root)]):
             for newest, stale in ((old_path, new_path), (new_path, old_path)):
                 os.utime(stale, (1000, 1000))
@@ -179,7 +182,7 @@ class TestGameLogPathResolution(unittest.TestCase):
             return_value=SimpleNamespace(user_data_path="", game_version="1.7.4976 rev1043")))
         api.game_monitor = SimpleNamespace(get_runtime_session=Mock(
             return_value=RuntimeSession(profile_id="runtime", state="running", source="manager")))
-        with patch("backend.managers.mgr_game.platform.system", return_value="Windows"), \
+        with patch("backend.managers.mgr_game.platform.system", return_value=NON_DARWIN_SYSTEM), \
              patch("backend.managers.mgr_game_logs.GameManager.get_default_user_data_paths", return_value=[str(default_root)]), \
              patch("backend.paths.game_locations.get_default_user_data_paths", return_value=[str(default_root)]):
             files = api.get_log_files("game", "runtime")

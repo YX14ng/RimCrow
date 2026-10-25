@@ -218,7 +218,9 @@ def test_manager_can_resolve_launch_geometry_without_display_enumerator():
         displays_provider=lambda: [],
     )
 
-    launch = manager.resolve_launch_geometry()
+    # 没有枚举器时回退到 pywebview 的屏幕列表；固定成一块屏，避免结果取决于测试机的显示器。
+    with patch("backend.window_state._get_pywebview_displays", return_value=[display()]):
+        launch = manager.resolve_launch_geometry()
 
     assert launch.width >= 1100
     assert launch.height >= 700

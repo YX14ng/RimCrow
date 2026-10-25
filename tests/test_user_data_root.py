@@ -2,11 +2,12 @@ import os
 import unittest
 
 from backend.profile.user_data_root import UserDataRoot
+from tests.host_paths import host_path
 
 
 class TestUserDataRoot(unittest.TestCase):
     def test_from_raw_fixes_default_config_child_to_root(self):
-        default_root = os.path.normpath("C:/Users/Test/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios")
+        default_root = os.path.normpath(host_path("C:/Users/Test/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios"))
 
         result = UserDataRoot.from_raw(
             default_root + "/Config",
@@ -19,7 +20,7 @@ class TestUserDataRoot(unittest.TestCase):
         self.assertEqual(result.mods_config_file, os.path.join(default_root, "Config", "ModsConfig.xml"))
 
     def test_from_raw_fixes_default_modsconfig_file_to_root(self):
-        default_root = os.path.normpath("C:/Users/Test/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios")
+        default_root = os.path.normpath(host_path("C:/Users/Test/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios"))
 
         result = UserDataRoot.from_raw(
             default_root + "/Config/ModsConfig.xml",
@@ -32,6 +33,6 @@ class TestUserDataRoot(unittest.TestCase):
     def test_from_raw_rejects_non_default_child_path_guess(self):
         with self.assertRaises(ValueError):
             UserDataRoot.from_raw(
-                "D:/Profiles/CustomProfile/Config",
-                default_roots=["C:/Users/Test/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios"],
+                host_path("D:/Profiles/CustomProfile/Config"),
+                default_roots=[host_path("C:/Users/Test/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios")],
             )

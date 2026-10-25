@@ -13,6 +13,7 @@ from backend.managers.mgr_data_bundle import DataBundleManager
 from backend.managers.mgr_mod_package import ModPackageManager
 from backend.managers.mgr_rules import RuleManager
 from backend.settings import settings
+from tests.host_paths import host_path
 
 
 def _make_context(local_mods_path: str, game_dlc_path: str = "", *, use_workshop_mods: bool = True, use_self_mods: bool = True):
@@ -590,18 +591,18 @@ class TestModPackageManager(unittest.TestCase):
         profile_mgr = _StubProfileManager()
         data_bundle_mgr = DataBundleManager(profile_mgr, ai_mgr=None, rule_mgr_provider=lambda: None)
         manager = ModPackageManager(profile_mgr, data_bundle_mgr, load_order_mgr_provider=lambda: None)
-        context = _make_context("D:/Game/Mods", "D:/Game/Data")
+        context = _make_context(host_path("D:/Game/Mods"), host_path("D:/Game/Data"))
         visible_mods = [
-            {"package_id": "local.mod", "path": "D:/Game/Mods/LocalMod"},
-            {"package_id": "self.mod", "path": "D:/SelfMods/SelfMod"},
-            {"package_id": "workshop.mod", "path": "D:/WorkshopMods/WorkshopMod"},
-            {"package_id": "core.mod", "path": "D:/Game/Data/Core"},
-            {"package_id": "tool.mod", "path": "D:/ToolMods/ToolMod"},
+            {"package_id": "local.mod", "path": host_path("D:/Game/Mods/LocalMod")},
+            {"package_id": "self.mod", "path": host_path("D:/SelfMods/SelfMod")},
+            {"package_id": "workshop.mod", "path": host_path("D:/WorkshopMods/WorkshopMod")},
+            {"package_id": "core.mod", "path": host_path("D:/Game/Data/Core")},
+            {"package_id": "tool.mod", "path": host_path("D:/ToolMods/ToolMod")},
         ]
 
         with (
-            patch.object(settings.config, "self_mods_path", "D:/SelfMods"),
-            patch.object(settings.config, "workshop_mods_path", "D:/WorkshopMods"),
+            patch.object(settings.config, "self_mods_path", host_path("D:/SelfMods")),
+            patch.object(settings.config, "workshop_mods_path", host_path("D:/WorkshopMods")),
         ):
             path_scope = _ProfilePathScope.from_context(context)
             result = manager._resolve_requested_mod_ids(  # noqa: SLF001

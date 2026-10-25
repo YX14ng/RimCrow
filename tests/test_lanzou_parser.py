@@ -22,7 +22,9 @@ def response(text="", payload=None, url="", status=200, headers=None):
 
 
 @pytest.fixture
-def parser():
+def parser(monkeypatch):
+    # 样例文件名都是 Windows 安装包，按 Windows 主机判断平台兼容性。
+    monkeypatch.setattr("backend.utils.tools.platform.system", lambda: "Windows")
     session = Mock(headers={}, cookies=requests.cookies.RequestsCookieJar())
     return LanzouParser(session=session)
 

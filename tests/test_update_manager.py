@@ -13,6 +13,7 @@ from backend.managers.mgr_download import DownloadTask
 from backend.managers.mgr_update import GiteeSource, GithubSource, LanzouSource, LocalSource, ManifestSource, SourceForgeSource, UpdateInfo, UpdateManager, UpdateSourceError, _build_configured_update_sources
 from backend.settings import settings
 from backend.utils.lanzou_parser import LanzouParser
+from tests.host_paths import HOST_PACKAGE_PLATFORM, IS_WINDOWS_HOST
 
 
 @pytest.fixture(autouse=True)
@@ -770,6 +771,7 @@ class TestUpdateManagerSources(unittest.TestCase):
             self.assertIs(manager.check_all(), downloaded)
         self.assertIs(manager.current_update_info, downloaded)
 
+    @unittest.skipUnless(IS_WINDOWS_HOST, "旧版 RimModManager.exe 的热替换只存在于 Windows 安装包")
     def test_hot_swap_from_rimmodmanager_launches_rimcrow_exe(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -830,7 +832,7 @@ class TestConfiguredUpdateSources(unittest.TestCase):
             "version": "99.0.0",
             "changelog": "清单更新",
             "assets": [{
-                "platform": "windows-x64",
+                "platform": HOST_PACKAGE_PLATFORM,
                 "size": 2048,
                 "sha256": "a" * 64,
                 "mirrors": [

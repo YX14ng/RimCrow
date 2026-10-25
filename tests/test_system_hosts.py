@@ -226,6 +226,7 @@ class TestSystemHostsService(unittest.TestCase):
                 self.assertEqual(path.read_bytes() == original, cancel)
                 self.assertEqual(helper_errors, [])
 
+    @unittest.skipUnless(os.name == "nt", "Hosts 提权只在 Windows 上实现")
     def test_close_cancels_authorization_without_requesting_cleanup_elevation(self):
         service = SystemHostsService(Path("main.py"), Mock())
         authorizing = threading.Event()

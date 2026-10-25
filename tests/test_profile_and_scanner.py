@@ -29,6 +29,7 @@ from backend.migrations.path_normalization import PATH_NORMALIZATION_INFO_KEY, P
 from backend.scanner.analyzer import ModAnalyzer
 from backend.scanner.mod_scanner import ModScanner
 from backend.utils.tools import generate_path_hash, normalize_path_for_storage
+from tests.host_paths import IS_WINDOWS_HOST, host_path
 
 
 class TestProfileManager(unittest.TestCase):
@@ -519,11 +520,11 @@ class TestProfileManager(unittest.TestCase):
         imported_profile = {
             "id": "profile-a",
             "name": "Profile A",
-            "game_install_path": "D:/Games/RimWorld",
+            "game_install_path": host_path("D:/Games/RimWorld"),
             "game_version": "1.5.0",
             "prefer_steam_launch": False,
             "use_workshop_mods": False,
-            "user_data_path": "C:/Users/Test/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios/Config",
+            "user_data_path": host_path("C:/Users/Test/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios/Config"),
         }
 
         inserted_rows = []
@@ -546,14 +547,14 @@ class TestProfileManager(unittest.TestCase):
         with patch("backend.managers.mgr_profile.GameProfile.insert", side_effect=lambda **payload: _InsertQuery(payload)), \
              patch("backend.managers.mgr_profile.db.atomic", return_value=nullcontext()), \
              patch("backend.managers.mgr_profile.GameManager.get_default_user_data_paths", return_value=[
-                 "C:/Users/Test/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios"
+                 host_path("C:/Users/Test/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios")
              ]):
             ok, _ = manager.import_profile_from_disk(imported_profile)
 
         self.assertTrue(ok)
         self.assertEqual(
             inserted_rows[0]["user_data_path"],
-            os.path.normpath("C:/Users/Test/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios"),
+            os.path.normpath(host_path("C:/Users/Test/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios")),
         )
 
     def test_import_profile_from_disk_uses_orphan_folder_when_snapshot_points_to_default_user_data(self):
@@ -1116,6 +1117,7 @@ class TestGameInstallInspector(unittest.TestCase):
         self.assertFalse(facts.is_steam)
         self.assertFalse(facts.is_steam_managed)
 
+    @unittest.skipUnless(IS_WINDOWS_HOST, "模拟 Windows 时会用 ntpath 规范化真实的临时文件路径，只能在 Windows 上验证")
     def test_find_windows_steam_api_in_unity_plugins_directory(self):
         install_root = self.temp_root / "RimWorld"
         plugin_dir = install_root / "RimWorldWin64_Data" / "Plugins" / "x86_64"
@@ -2862,12 +2864,12 @@ class TestApiScanMods(unittest.TestCase):
 
     def test_workspace_classification_treats_current_local_self_path_as_local_only(self):
         scope = _ProfilePathScope(
-            local_root=_ProfilePathScope._normalize_root("C:/Games/RimWorld/Mods"),
-            self_root=_ProfilePathScope._normalize_root("C:/Games/RimWorld/Mods"),
+            local_root=_ProfilePathScope._normalize_root(host_path("C:/Games/RimWorld/Mods")),
+            self_root=_ProfilePathScope._normalize_root(host_path("C:/Games/RimWorld/Mods")),
         )
 
         self.assertEqual(
-            scope.classify_asset({"path": "C:/Games/RimWorld/Mods/TestMod", "store": "self"}),
+            scope.classify_asset({"path": host_path("C:/Games/RimWorld/Mods/TestMod"), "store": "self"}),
             "local",
         )
 
