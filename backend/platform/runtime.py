@@ -49,6 +49,20 @@ def open_uri(uri: str) -> None:
     )
 
 
+def apply_qtwebengine_flags(extra_flags: list[str], environ=None) -> str:
+    """
+    把 Chromium 参数交给 Linux 下 pywebview 用的 Qt WebEngine，同时保留用户自己设置的参数。
+
+    重启出来的新实例会继承整个环境，所以第一次启动时把用户原本的值单独记下来，每次都从它重新拼，
+    避免上一次的参数（比如已经关掉的代理）一路叠加下去。
+    """
+    env = os.environ if environ is None else environ
+    user_flags = env.setdefault("RIMCROW_USER_QTWEBENGINE_FLAGS", env.get("QTWEBENGINE_CHROMIUM_FLAGS", "").strip())
+    flags = " ".join(filter(None, [user_flags.strip(), *extra_flags]))
+    env["QTWEBENGINE_CHROMIUM_FLAGS"] = flags
+    return flags
+
+
 def reveal_in_file_manager(path: str) -> bool:
     """Linux 下通过 FileManager1 D-Bus 接口在文件管理器里选中文件；接口不可用时返回 False。"""
     gdbus = shutil.which("gdbus")

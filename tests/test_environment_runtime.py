@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_game_monitor import GameMonitor
 from backend.paths.rimworld_layout import resolve_rimworld_layout
-from backend.platform.runtime import monitoring_mode, supports_process_monitoring
+from backend.platform.runtime import apply_qtwebengine_flags, monitoring_mode, supports_process_monitoring
 from backend.startup import StartupCoordinator
 from backend.utils.restart import _build_restart_environment, _resolve_restart_command
 
@@ -281,6 +281,16 @@ class TestGameMonitorRuntimeSession(unittest.TestCase):
         popen.assert_not_called()
 
 class TestRestartRuntime(unittest.TestCase):
+    def test_qtwebengine_flags_do_not_accumulate_across_restarts(self):
+        first_env = {"QTWEBENGINE_CHROMIUM_FLAGS": "--enable-gpu-rasterization"}
+        apply_qtwebengine_flags(["--proxy-server=http://old:1"], first_env)
+        # 重启出来的新进程继承整个环境；关掉代理后不能还带着上一次的 --proxy-server。
+        restarted_env = dict(first_env)
+        flags = apply_qtwebengine_flags(["--allow-file-access-from-files"], restarted_env)
+
+        self.assertEqual(flags, "--enable-gpu-rasterization --allow-file-access-from-files")
+        self.assertEqual(restarted_env["QTWEBENGINE_CHROMIUM_FLAGS"], flags)
+
     def test_restart_command_uses_current_python_on_non_windows(self):
         fake_python = Path("/tmp/fake-venv/bin/python3")
         with patch("backend.platform.runtime.is_windows", return_value=False), \

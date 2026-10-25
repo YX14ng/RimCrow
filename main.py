@@ -320,10 +320,10 @@ def main():
         
         # 设置环境变量传给 WebView2
         os.environ['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS'] = " ".join(additional_args)
-        # Linux 下 pywebview 用的 Qt WebEngine 同样基于 Chromium，代理等参数要走 QTWEBENGINE_CHROMIUM_FLAGS；保留用户自己设置的参数。
+        # Linux 下 pywebview 用的 Qt WebEngine 同样基于 Chromium，代理等参数要走 QTWEBENGINE_CHROMIUM_FLAGS。
         if sys.platform.startswith("linux"):
-            existing_flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "").strip()
-            os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = " ".join(filter(None, [existing_flags, *additional_args]))
+            from backend.platform.runtime import apply_qtwebengine_flags
+            apply_qtwebengine_flags(additional_args)
         entrypoint = get_entrypoint()
         log_startup_perf("entrypoint_resolved", entrypoint=entrypoint)
         
