@@ -4,8 +4,10 @@ import argparse
 import hashlib
 import os
 import shutil
+import subprocess
 import sys
-from pathlib import Path
+import tempfile
+from pathlib import Path, PurePosixPath
 from zipfile import ZipFile
 
 
@@ -47,6 +49,10 @@ STEAMWORKSPY_FILES = {
         ],
     },
 }
+
+
+SDK_HEADER_PREFIX = "sdk/public/steam/"
+LINUX_SDK_LIBRARY = "sdk/redistributable_bin/linux64/libsteam_api.so"
 
 
 def sha256(path: Path) -> str:
@@ -100,6 +106,46 @@ def copy_steamworkspy_files(runtime_dir: Path) -> tuple[list[Path], list[str]]:
     return copied, missing
 
 
+def build_linux_steamworkspy(sdk_path: Path, runtime_dir: Path, source_dir: Path = DEFAULT_SUBMODULE_DIR / "library") -> Path:
+    """上游只提供 Windows 预编译版；Linux 下用 SDK 头文件和 libsteam_api.so 现场编译 SteamworksPy.so。"""
+    compiler = shutil.which("g++")
+    if not compiler:
+        raise FileNotFoundError("未找到 g++，无法编译 SteamworksPy.so")
+    source_file = source_dir / "SteamworksPy.cpp"
+    if not source_file.is_file():
+        raise FileNotFoundError(f"未找到 {source_file}，请先执行 git submodule update --init")
+
+    with tempfile.TemporaryDirectory(prefix="steamworkspy-build-") as temp_dir:
+        build_dir = Path(temp_dir)
+        shutil.copy2(source_file, build_dir / "SteamworksPy.cpp")
+        header_dir = build_dir / "sdk" / "steam"
+        with ZipFile(sdk_path) as archive:
+            for name in archive.namelist():
+                if not name.startswith(SDK_HEADER_PREFIX) or name.endswith("/"):
+                    continue
+                relative = PurePosixPath(name[len(SDK_HEADER_PREFIX):])
+                if relative.is_absolute() or ".." in relative.parts:
+                    raise ValueError(f"SDK zip 包含非法路径: {name}")
+                target = header_dir.joinpath(*relative.parts)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(name) as source, target.open("wb") as output:
+                    shutil.copyfileobj(source, output)
+            with archive.open(LINUX_SDK_LIBRARY) as source, (build_dir / "libsteam_api.so").open("wb") as output:
+                shutil.copyfileobj(source, output)
+
+        # SteamworksPy.cpp 以 "sdk/steam/steam_api.h" 引用头文件；rpath 让它在运行库目录里找到同目录的 libsteam_api.so。
+        subprocess.run(
+            [compiler, "-std=c++11", "-O2", "-shared", "-fPIC", "-o", "SteamworksPy.so", "SteamworksPy.cpp",
+             "-L.", "-lsteam_api", "-Wl,-rpath,$ORIGIN"],
+            cwd=build_dir,
+            check=True,
+        )
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        target_path = runtime_dir / "SteamworksPy.so"
+        shutil.copy2(build_dir / "SteamworksPy.so", target_path)
+    return target_path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="准备 SteamworksPy 和 Steamworks SDK 运行库")
     parser.add_argument("--sdk", default="", help="steamworks_sdk_*.zip 路径；也可用 STEAMWORKS_SDK_ZIP 环境变量")
@@ -110,6 +156,9 @@ def main() -> int:
     sdk_path = resolve_sdk_path(args.sdk)
     sdk_outputs = extract_sdk_files(sdk_path, runtime_dir)
     steamworkspy_outputs, missing = copy_steamworkspy_files(runtime_dir)
+    if sys.platform.startswith("linux"):
+        steamworkspy_outputs.append(build_linux_steamworkspy(sdk_path, runtime_dir))
+        missing = [item for item in missing if item != "linux/SteamworksPy.so"]
 
     print(f"Steamworks SDK: {sdk_path}")
     print(f"Runtime dir: {runtime_dir}")
