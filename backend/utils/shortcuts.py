@@ -207,7 +207,18 @@ def _quote_desktop_exec_arg(value: str) -> str:
     if text and not any(char in _DESKTOP_EXEC_RESERVED for char in text):
         return text
     escaped = "".join("\\" + char if char in '"`$\\' else char for char in text)
-    return '"' + escaped.replace("\\", "\\\\") + '"'
+    return '"' + _escape_desktop_control_chars(escaped.replace("\\", "\\\\")) + '"'
+
+
+def _escape_desktop_control_chars(text: str) -> str:
+    # 值里不能出现真实换行，否则导入数据里的参数能多写出一行 Exec= 之类的键。
+    return text.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+
+
+def _desktop_string(value: str, *, single_line: bool = False) -> str:
+    """按字符串类型的转义规则写入 Name/Comment/Path/Icon 等值。"""
+    text = " ".join(str(value).split()) if single_line else str(value)
+    return _escape_desktop_control_chars(text.replace("\\", "\\\\"))
 
 
 def _split_shortcut_arguments(arguments: str) -> list[str]:
@@ -252,23 +263,25 @@ def create_linux_desktop_shortcut(
         argv = [normalized_target, *_split_shortcut_arguments(arguments)]
     env_assignments = [f"{key}={value}" for key, value in (environment or {}).items()]
     if env_assignments:
-        argv = ["env", *env_assignments, *argv]
+        # env 会把含 = 的第一个参数也当成变量赋值，这种路径改由 sh exec 目标。
+        command = ["sh", "-c", 'exec "$0" "$@"', *argv] if "=" in argv[0] else argv
+        argv = ["env", *env_assignments, *command]
     exec_value = " ".join(_quote_desktop_exec_arg(arg) for arg in argv)
 
     lines = [
         "[Desktop Entry]",
         "Version=1.0",
         "Type=Application",
-        f"Name={Path(normalized_shortcut).stem}",
+        f"Name={_desktop_string(Path(normalized_shortcut).stem, single_line=True)}",
         f"Exec={exec_value}",
         "Terminal=false",
     ]
     if str(description or "").strip():
-        lines.append(f"Comment={str(description).strip()}")
+        lines.append(f"Comment={_desktop_string(description, single_line=True)}")
     if normalized_workdir:
-        lines.append(f"Path={normalized_workdir}")
+        lines.append(f"Path={_desktop_string(normalized_workdir)}")
     if normalized_icon:
-        lines.append(f"Icon={normalized_icon}")
+        lines.append(f"Icon={_desktop_string(normalized_icon)}")
 
     with open(normalized_shortcut, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")

@@ -108,6 +108,46 @@ class TestShortcutHelpers(unittest.TestCase):
         )
 
     @patch("backend.utils.shortcuts.platform.system", return_value="Linux")
+    def test_linux_desktop_file_cannot_be_split_by_newlines(self, _platform_system):
+        shortcut_path = self.desktop_dir / "Injected.desktop"
+        create_shortcut(
+            {
+                "shortcut_path": str(shortcut_path),
+                "target_path": str(self.target_path),
+                # 导入的数据包里的启动参数和环境名都可能带换行，不能借此多写一行 Exec=。
+                "arguments": "'-x\nExec=sh -c \"echo PWNED\" #'",
+                "description": "环境\nExec=sh -c 'echo PWNED'",
+                "shortcut_kind": "desktop",
+            }
+        )
+
+        lines = shortcut_path.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(sum(1 for line in lines if line.startswith("Exec=")), 1)
+        self.assertIn("\\n", next(line for line in lines if line.startswith("Exec=")))
+        self.assertEqual(next(line for line in lines if line.startswith("Comment=")), "Comment=环境 Exec=sh -c 'echo PWNED'")
+
+    @patch("backend.utils.shortcuts.platform.system", return_value="Linux")
+    def test_linux_desktop_env_prefix_handles_target_path_with_equals(self, _platform_system):
+        target_dir = self.temp_dir / "a=b"
+        target_dir.mkdir()
+        target = target_dir / "RimWorldLinux"
+        target.write_text("", encoding="utf-8")
+        shortcut_path = self.desktop_dir / "Equals.desktop"
+        create_shortcut(
+            {
+                "shortcut_path": str(shortcut_path),
+                "target_path": str(target),
+                "environment": {"LC_ALL": "C"},
+                "shortcut_kind": "desktop",
+            }
+        )
+
+        exec_line = next(line for line in shortcut_path.read_text(encoding="utf-8").splitlines() if line.startswith("Exec="))
+        # env 会把带 = 的路径当成变量赋值；这时要经由 sh 再 exec 目标。
+        self.assertIn("sh -c", exec_line)
+        self.assertIn(str(target), exec_line)
+
+    @patch("backend.utils.shortcuts.platform.system", return_value="Linux")
     @patch("backend.managers.mgr_files.platform.system", return_value="Linux")
     @patch("backend.managers.mgr_files.get_desktop_directory")
     @patch("backend.managers.mgr_files.GameManager.detect_executable")
