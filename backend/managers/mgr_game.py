@@ -29,7 +29,7 @@ class GameManager:
         # RimWorld 1.7 (Waylith engine) runs as RimWorld.exe; legacy names are kept.
         'Windows': ("RimWorld.exe", "RimWorldWin64.exe", "RimWorldWin.exe"),
         'Darwin': ("RimWorldMac",),
-        'Linux': ("RimWorldLinux", "RimWorldLinux.x86_64", "RimWorldWin64.exe", "RimWorldWin.exe"),
+        'Linux': ("RimWorld", "RimWorldLinux", "RimWorldLinux.x86_64", "RimWorldWin64.exe", "RimWorldWin.exe"),
     }
 
     @classmethod

@@ -135,6 +135,11 @@ class TestGameMonitorRuntimeSession(unittest.TestCase):
         self.assertTrue(monitor._is_target_process("RimWorldLinux.x"))
         self.assertFalse(monitor._is_target_process("RimWorldWin64.x"))
 
+    def test_is_target_process_matches_linux_waylith_binary(self):
+        monitor = GameMonitor.__new__(GameMonitor)
+
+        self.assertTrue(monitor._is_target_process("RimWorld"))
+
     def test_monitoring_mode_uses_psutil_on_linux(self):
         with patch("backend.platform.runtime.is_windows", return_value=False), \
              patch("backend.platform.runtime.is_linux", return_value=True):
@@ -229,6 +234,31 @@ class TestGameMonitorRuntimeSession(unittest.TestCase):
 
             self.assertEqual(layout.executable_path, str(exe_path))
             self.assertEqual(layout.layout_kind, "windows")
+
+    def test_linux_detect_executable_prefers_waylith_binary(self):
+        with TemporaryDirectory() as tmp:
+            install_root = Path(tmp)
+            # RimWorld 1.7 (Waylith) 在 Linux 上的可执行文件是 RimWorld，不再是 Unity 的 RimWorldLinux。
+            (install_root / "RimWorld").write_text("", encoding="utf-8")
+            (install_root / "RimWorldLinux").write_text("", encoding="utf-8")
+
+            with patch("backend.managers.mgr_game.platform.system", return_value="Linux"):
+                self.assertEqual(
+                    GameManager.detect_executable(str(install_root)),
+                    str(install_root / "RimWorld"),
+                )
+
+    def test_linux_resolve_layout_reports_waylith_executable(self):
+        with TemporaryDirectory() as tmp:
+            install_root = Path(tmp)
+            (install_root / "Data" / "Core").mkdir(parents=True)
+            exe_path = install_root / "RimWorld"
+            exe_path.write_text("", encoding="utf-8")
+
+            layout = resolve_rimworld_layout(str(install_root), "Linux")
+
+            self.assertEqual(layout.executable_path, str(exe_path))
+            self.assertEqual(layout.layout_kind, "linux")
 
     def test_linux_detect_executable_accepts_proton_windows_binary(self):
         with TemporaryDirectory() as tmp:
